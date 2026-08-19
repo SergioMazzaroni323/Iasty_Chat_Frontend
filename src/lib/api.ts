@@ -8,6 +8,7 @@ export interface User {
   tier: "basic" | "free" | "plus";
   token_limit: number;
   is_admin: boolean;
+  is_active: boolean;
   email_verified: boolean;
 }
 
@@ -27,6 +28,8 @@ export interface AdminUser {
   username: string;
   plan: "free" | "plus";
   is_admin: boolean;
+  is_active: boolean;
+  email_verified: boolean;
   chat_count: number;
   token_used: number;
   additional_data_count: number;
@@ -205,6 +208,7 @@ export const api = {
     email?: string;
     current_password?: string;
     new_password?: string;
+    is_active?: boolean;
   }) =>
     request<User>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
   updatePlan: (plan: "free" | "plus") =>

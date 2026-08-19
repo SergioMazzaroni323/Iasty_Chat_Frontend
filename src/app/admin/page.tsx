@@ -242,6 +242,8 @@ export default function AdminPage() {
                   <tr>
                     <th className="px-5 py-3.5 font-medium">User</th>
                     <th className="px-5 py-3.5 font-medium">Plan</th>
+                    <th className="px-5 py-3.5 font-medium">Status</th>
+                    <th className="px-5 py-3.5 font-medium">Verify</th>
                     <th className="px-5 py-3.5 font-medium">Admin</th>
                     <th className="px-5 py-3.5 font-medium">Chats</th>
                     <th className="px-5 py-3.5 font-medium">Tokens</th>
@@ -270,6 +272,12 @@ export default function AdminPage() {
                           <option value="free">Free</option>
                           <option value="plus">Plus</option>
                         </select>
+                      </td>
+                      <td className="px-5 py-4 text-sm" style={{ color: u.is_active ? "#22c55e" : "#ef4444" }}>
+                        {u.is_active ? "Active" : "Deactive"}
+                      </td>
+                      <td className="px-5 py-4 text-sm" style={{ color: u.email_verified ? "#22c55e" : "#f59e0b" }}>
+                        {u.email_verified ? "Verified" : "Unverified"}
                       </td>
                       <td className="px-5 py-4">
                         <input

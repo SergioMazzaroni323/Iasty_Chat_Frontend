@@ -16,6 +16,7 @@ export function SettingsDialog({ open, user, onClose, onUpdated }: SettingsDialo
   const [tab, setTab] = useState<"user" | "premium">("user");
   const [username, setUsername] = useState(user.username);
   const [email, setEmail] = useState(user.email);
+  const [isActive, setIsActive] = useState(user.is_active);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -32,6 +33,7 @@ export function SettingsDialog({ open, user, onClose, onUpdated }: SettingsDialo
         email,
         current_password: newPassword ? currentPassword : undefined,
         new_password: newPassword || undefined,
+        is_active: isActive,
       });
       onUpdated(updated);
       setMessage("Settings saved.");
@@ -97,11 +99,38 @@ export function SettingsDialog({ open, user, onClose, onUpdated }: SettingsDialo
                   onChange={(e) => setEmail(e.target.value)}
                   className="input-field px-4 py-2.5 text-sm"
                 />
+                <div className="flex flex-wrap gap-2">
+                  <span className="badge">{user.email_verified ? "Verified" : "Unverified"}</span>
+                  <span className="badge">{isActive ? "Active" : "Deactive"}</span>
+                </div>
                 {!user.email_verified && (
                   <p className="text-xs" style={{ color: "var(--fg-muted)" }}>
                     Your email is not verified yet. Save a new email to receive a fresh verification link.
                   </p>
                 )}
+              </Field>
+              <Field label="Account status">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setIsActive(true)}
+                    disabled={loading || isActive}
+                    className={`rounded-xl px-4 py-2 text-sm font-medium ${isActive ? "surface-inset" : "btn-primary"}`}
+                    style={isActive ? { color: "var(--fg-muted)" } : undefined}
+                  >
+                    Active
+                  </button>
+                  <button
+                    onClick={() => setIsActive(false)}
+                    disabled={loading || !isActive}
+                    className={`rounded-xl px-4 py-2 text-sm font-medium ${!isActive ? "surface-inset" : "btn-ghost"}`}
+                    style={!isActive ? { color: "var(--fg-muted)" } : { color: "#ef4444" }}
+                  >
+                    Deactive
+                  </button>
+                </div>
+                <p className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                  This lets you mark your account as active or deactive from settings.
+                </p>
               </Field>
               <Field label="Current password">
                 <PasswordField
