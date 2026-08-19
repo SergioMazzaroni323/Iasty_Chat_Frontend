@@ -17,7 +17,7 @@ type Tab = "dashboard" | "users" | "chats";
 
 export default function AdminPage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, loading, refresh } = useAuth();
   const [tab, setTab] = useState<Tab>("dashboard");
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -117,17 +117,31 @@ export default function AdminPage() {
     }
   }, [user, loading, router, load]);
 
-  const updateUser = async (id: number, data: { plan?: "free" | "plus"; is_admin?: boolean }) => {
+  const updateUser = async (
+    id: number,
+    data: {
+      plan?: "free" | "plus";
+      is_admin?: boolean;
+      is_active?: boolean;
+      email_verified?: boolean;
+    }
+  ) => {
     setBusy(true);
     try {
       const updated = await api.adminUpdateUser(id, data);
       setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+      if (id === user?.id) {
+        await refresh();
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Update failed");
     } finally {
       setBusy(false);
     }
   };
+
+  const normalizePlan = (plan: string): "free" | "plus" =>
+    plan?.toLowerCase() === "plus" ? "plus" : "free";
 
   const deleteUser = async (id: number) => {
     if (!confirm("Delete this user and all their chats?")) return;
@@ -262,8 +276,8 @@ export default function AdminPage() {
                       </td>
                       <td className="px-5 py-4">
                         <select
-                          value={u.plan}
-                          disabled={busy || u.id === user.id}
+                          value={normalizePlan(u.plan)}
+                          disabled={busy}
                           onChange={(e) =>
                             updateUser(u.id, { plan: e.target.value as "free" | "plus" })
                           }
@@ -273,11 +287,36 @@ export default function AdminPage() {
                           <option value="plus">Plus</option>
                         </select>
                       </td>
-                      <td className="px-5 py-4 text-sm" style={{ color: u.is_active ? "#22c55e" : "#ef4444" }}>
-                        {u.is_active ? "Active" : "Deactive"}
+                      <td className="px-5 py-4">
+                        <button
+                          type="button"
+                          disabled={busy || (u.id === user.id && u.is_active !== false)}
+                          onClick={() => updateUser(u.id, { is_active: !u.is_active })}
+                          className="rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                          style={{
+                            background: u.is_active !== false ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+                            color: u.is_active !== false ? "#22c55e" : "#ef4444",
+                            border: `1px solid ${u.is_active !== false ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+                          }}
+                          title={u.id === user.id ? "You cannot deactivate your own account" : undefined}
+                        >
+                          {u.is_active !== false ? "Active" : "Deactive"}
+                        </button>
                       </td>
-                      <td className="px-5 py-4 text-sm" style={{ color: u.email_verified ? "#22c55e" : "#f59e0b" }}>
-                        {u.email_verified ? "Verified" : "Unverified"}
+                      <td className="px-5 py-4">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => updateUser(u.id, { email_verified: !u.email_verified })}
+                          className="rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                          style={{
+                            background: u.email_verified ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)",
+                            color: u.email_verified ? "#22c55e" : "#f59e0b",
+                            border: `1px solid ${u.email_verified ? "rgba(34,197,94,0.25)" : "rgba(245,158,11,0.25)"}`,
+                          }}
+                        >
+                          {u.email_verified ? "Verified" : "Unverified"}
+                        </button>
                       </td>
                       <td className="px-5 py-4">
                         <input

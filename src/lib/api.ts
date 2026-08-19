@@ -408,8 +408,15 @@ export const api = {
   },
   adminStats: () => request<AdminStats>("/admin/stats"),
   adminUsers: () => request<AdminUser[]>("/admin/users"),
-  adminUpdateUser: (id: number, data: { plan?: "free" | "plus"; is_admin?: boolean }) =>
-    request<AdminUser>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  adminUpdateUser: (
+    id: number,
+    data: {
+      plan?: "free" | "plus";
+      is_admin?: boolean;
+      is_active?: boolean;
+      email_verified?: boolean;
+    }
+  ) => request<AdminUser>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteUser: (id: number) =>
     request<{ ok: boolean }>(`/admin/users/${id}`, { method: "DELETE" }),
   adminChats: (params?: {
