@@ -6,14 +6,33 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft,
   LayoutDashboard,
+  Loader2,
   MessageSquare,
   Trash2,
   Users,
 } from "lucide-react";
 import { AdditionalDataItem, AdminChat, AdminStats, AdminUser, api } from "@/lib/api";
+import { ToastHost, toast } from "@/components/Toast";
 import { useAuth } from "@/hooks/useAuth";
 
 type Tab = "dashboard" | "users" | "chats";
+
+const DEACTIVATION_REASONS = [
+  "Terms of service violation",
+  "Suspicious or abusive activity",
+  "Payment or billing issue",
+  "Account security concern",
+  "User requested deactivation",
+  "Other",
+] as const;
+
+function isUserActive(u: AdminUser): boolean {
+  return u.is_active !== false;
+}
+
+function isEmailVerified(u: AdminUser): boolean {
+  return u.email_verified === true;
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -40,6 +59,13 @@ export default function AdminPage() {
   const [additionalDataBusy, setAdditionalDataBusy] = useState(false);
   const [additionalDataItems, setAdditionalDataItems] = useState<AdditionalDataItem[]>([]);
   const [additionalDataError, setAdditionalDataError] = useState("");
+
+  const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<AdminUser | null>(null);
+  const [deactivateReason, setDeactivateReason] = useState<(typeof DEACTIVATION_REASONS)[number]>(
+    DEACTIVATION_REASONS[0]
+  );
+  const [deactivateCustomReason, setDeactivateCustomReason] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -123,8 +149,9 @@ export default function AdminPage() {
       plan?: "free" | "plus";
       is_admin?: boolean;
       is_active?: boolean;
-      email_verified?: boolean;
-    }
+      deactivation_reason?: string;
+    },
+    options?: { successMessage?: string; errorMessage?: string }
   ) => {
     setBusy(true);
     try {
@@ -133,11 +160,78 @@ export default function AdminPage() {
       if (id === user?.id) {
         await refresh();
       }
+      if (options?.successMessage) {
+        toast(options.successMessage, "success");
+      }
+      return updated;
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Update failed");
+      toast(err instanceof Error ? err.message : options?.errorMessage || "Update failed", "error");
+      return null;
     } finally {
       setBusy(false);
     }
+  };
+
+  const setUserActiveStatus = async (
+    target: AdminUser,
+    isActive: boolean,
+    deactivationReason?: string
+  ) => {
+    setStatusUpdatingId(target.id);
+    try {
+      const updated = await api.adminUpdateUser(target.id, {
+        is_active: isActive,
+        deactivation_reason: isActive ? undefined : deactivationReason,
+      });
+      setUsers((prev) => prev.map((u) => (u.id === target.id ? updated : u)));
+      toast(
+        isActive
+          ? `${target.username} was activated. Notification email sent.`
+          : `${target.username} was deactivated. Notification email sent.`,
+        "success"
+      );
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to update account status", "error");
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
+
+  const openDeactivateDialog = (target: AdminUser) => {
+    setDeactivateTarget(target);
+    setDeactivateReason(DEACTIVATION_REASONS[0]);
+    setDeactivateCustomReason("");
+  };
+
+  const closeDeactivateDialog = () => {
+    if (statusUpdatingId !== null) return;
+    setDeactivateTarget(null);
+    setDeactivateCustomReason("");
+  };
+
+  const confirmDeactivate = async () => {
+    if (!deactivateTarget) return;
+    const reason =
+      deactivateReason === "Other"
+        ? deactivateCustomReason.trim()
+        : deactivateReason;
+    if (!reason) {
+      toast("Please choose or enter a deactivation reason", "error");
+      return;
+    }
+    await setUserActiveStatus(deactivateTarget, false, reason);
+    setDeactivateTarget(null);
+    setDeactivateCustomReason("");
+  };
+
+  const handleStatusClick = (target: AdminUser) => {
+    if (statusUpdatingId !== null) return;
+    if (target.id === user.id && isUserActive(target)) return;
+    if (isUserActive(target)) {
+      openDeactivateDialog(target);
+      return;
+    }
+    void setUserActiveStatus(target, true);
   };
 
   const normalizePlan = (plan: string): "free" | "plus" =>
@@ -181,6 +275,7 @@ export default function AdminPage() {
 
   return (
     <div className="app-shell flex min-h-screen">
+      <ToastHost />
       <aside
         className="glass-panel flex w-60 flex-col"
         style={{ borderTop: "none", borderBottom: "none", borderLeft: "none", borderRadius: 0 }}
@@ -290,33 +385,33 @@ export default function AdminPage() {
                       <td className="px-5 py-4">
                         <button
                           type="button"
-                          disabled={busy || (u.id === user.id && u.is_active !== false)}
-                          onClick={() => updateUser(u.id, { is_active: !u.is_active })}
-                          className="rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={
+                            statusUpdatingId === u.id ||
+                            (u.id === user.id && isUserActive(u))
+                          }
+                          onClick={() => handleStatusClick(u)}
+                          className="inline-flex min-w-[88px] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
                           style={{
-                            background: u.is_active !== false ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
-                            color: u.is_active !== false ? "#22c55e" : "#ef4444",
-                            border: `1px solid ${u.is_active !== false ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+                            background: isUserActive(u) ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+                            color: isUserActive(u) ? "#22c55e" : "#ef4444",
+                            border: `1px solid ${isUserActive(u) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
                           }}
                           title={u.id === user.id ? "You cannot deactivate your own account" : undefined}
                         >
-                          {u.is_active !== false ? "Active" : "Deactive"}
+                          {statusUpdatingId === u.id ? (
+                            <>
+                              <Loader2 size={12} className="animate-spin" />
+                              Updating...
+                            </>
+                          ) : isUserActive(u) ? (
+                            "Active"
+                          ) : (
+                            "Deactive"
+                          )}
                         </button>
                       </td>
-                      <td className="px-5 py-4">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => updateUser(u.id, { email_verified: !u.email_verified })}
-                          className="rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
-                          style={{
-                            background: u.email_verified ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)",
-                            color: u.email_verified ? "#22c55e" : "#f59e0b",
-                            border: `1px solid ${u.email_verified ? "rgba(34,197,94,0.25)" : "rgba(245,158,11,0.25)"}`,
-                          }}
-                        >
-                          {u.email_verified ? "Verified" : "Unverified"}
-                        </button>
+                      <td className="px-5 py-4 text-sm" style={{ color: isEmailVerified(u) ? "#22c55e" : "#f59e0b" }}>
+                        {isEmailVerified(u) ? "Verified" : "Unverified"}
                       </td>
                       <td className="px-5 py-4">
                         <input
@@ -530,6 +625,89 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+
+      {deactivateTarget && (
+        <div
+          className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeDeactivateDialog();
+          }}
+        >
+          <div className="glass-panel w-full max-w-md overflow-hidden rounded-2xl p-0">
+            <div
+              className="p-5"
+              style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-sunken)" }}
+            >
+              <h3 className="text-lg font-semibold">Deactivate account</h3>
+              <p className="mt-1 text-sm" style={{ color: "var(--fg-muted)" }}>
+                {deactivateTarget.username} ({deactivateTarget.email})
+              </p>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <div>
+                <p className="mb-2 text-sm font-medium">Reason</p>
+                <select
+                  value={deactivateReason}
+                  onChange={(e) =>
+                    setDeactivateReason(e.target.value as (typeof DEACTIVATION_REASONS)[number])
+                  }
+                  disabled={statusUpdatingId === deactivateTarget.id}
+                  className="input-field h-10 w-full px-3 text-sm"
+                >
+                  {DEACTIVATION_REASONS.map((reason) => (
+                    <option key={reason} value={reason}>
+                      {reason}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {deactivateReason === "Other" && (
+                <div>
+                  <p className="mb-2 text-sm font-medium">Custom reason</p>
+                  <textarea
+                    value={deactivateCustomReason}
+                    onChange={(e) => setDeactivateCustomReason(e.target.value)}
+                    disabled={statusUpdatingId === deactivateTarget.id}
+                    className="input-field min-h-[96px] w-full px-3 py-2 text-sm"
+                    placeholder="Describe why this account is being deactivated..."
+                  />
+                </div>
+              )}
+
+              <p className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                The user will receive an email with the selected reason.
+              </p>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  onClick={closeDeactivateDialog}
+                  disabled={statusUpdatingId === deactivateTarget.id}
+                  className="btn-ghost rounded-lg px-4 py-2 text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void confirmDeactivate()}
+                  disabled={statusUpdatingId === deactivateTarget.id}
+                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white"
+                  style={{ background: "#ef4444" }}
+                >
+                  {statusUpdatingId === deactivateTarget.id ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Deactivating...
+                    </>
+                  ) : (
+                    "Deactivate"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {additionalDataUserId !== null && (
         <div

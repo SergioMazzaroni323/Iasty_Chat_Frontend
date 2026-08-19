@@ -414,7 +414,7 @@ export const api = {
       plan?: "free" | "plus";
       is_admin?: boolean;
       is_active?: boolean;
-      email_verified?: boolean;
+      deactivation_reason?: string;
     }
   ) => request<AdminUser>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteUser: (id: number) =>
