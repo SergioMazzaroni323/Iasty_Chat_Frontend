@@ -147,7 +147,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 function parseErrorDetail(err: { detail?: unknown }): string {
   const detail = err.detail;
-  if (typeof detail === "string") return detail;
+  if (typeof detail === "string") return detail.replace(/^Value error,\s*/i, "");
   if (Array.isArray(detail)) {
     return detail
       .map((item) => {

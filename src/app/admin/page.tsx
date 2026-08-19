@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -32,6 +33,14 @@ function isUserActive(u: AdminUser): boolean {
 
 function isEmailVerified(u: AdminUser): boolean {
   return u.email_verified === true;
+}
+
+function normalizeAdminUser(u: AdminUser): AdminUser {
+  return {
+    ...u,
+    is_active: typeof u.is_active === "boolean" ? u.is_active : true,
+    email_verified: typeof u.email_verified === "boolean" ? u.email_verified : false,
+  };
 }
 
 export default function AdminPage() {
@@ -76,7 +85,7 @@ export default function AdminPage() {
         api.adminChats(),
       ]);
       setStats(s);
-      setUsers(u);
+      setUsers(u.map(normalizeAdminUser));
       setChats(c);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data");
@@ -148,8 +157,6 @@ export default function AdminPage() {
     data: {
       plan?: "free" | "plus";
       is_admin?: boolean;
-      is_active?: boolean;
-      deactivation_reason?: string;
     },
     options?: { successMessage?: string; errorMessage?: string }
   ) => {
@@ -181,9 +188,9 @@ export default function AdminPage() {
     try {
       const updated = await api.adminUpdateUser(target.id, {
         is_active: isActive,
-        deactivation_reason: isActive ? undefined : deactivationReason,
+        ...(isActive ? {} : { deactivation_reason: deactivationReason }),
       });
-      setUsers((prev) => prev.map((u) => (u.id === target.id ? updated : u)));
+      setUsers((prev) => prev.map((u) => (u.id === target.id ? normalizeAdminUser(updated) : u)));
       toast(
         isActive
           ? `${target.username} was activated. Notification email sent.`
@@ -224,13 +231,8 @@ export default function AdminPage() {
     setDeactivateCustomReason("");
   };
 
-  const handleStatusClick = (target: AdminUser) => {
+  const handleReactivate = (target: AdminUser) => {
     if (statusUpdatingId !== null) return;
-    if (target.id === user.id && isUserActive(target)) return;
-    if (isUserActive(target)) {
-      openDeactivateDialog(target);
-      return;
-    }
     void setUserActiveStatus(target, true);
   };
 
@@ -245,7 +247,7 @@ export default function AdminPage() {
       setUsers((prev) => prev.filter((u) => u.id !== id));
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Delete failed");
+      toast(err instanceof Error ? err.message : "Delete failed", "error");
     } finally {
       setBusy(false);
     }
@@ -259,7 +261,7 @@ export default function AdminPage() {
       setChats((prev) => prev.filter((c) => c.id !== id));
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Delete failed");
+      toast(err instanceof Error ? err.message : "Delete failed", "error");
     } finally {
       setBusy(false);
     }
@@ -383,35 +385,51 @@ export default function AdminPage() {
                         </select>
                       </td>
                       <td className="px-5 py-4">
-                        <button
-                          type="button"
-                          disabled={
-                            statusUpdatingId === u.id ||
-                            (u.id === user.id && isUserActive(u))
-                          }
-                          onClick={() => handleStatusClick(u)}
-                          className="inline-flex min-w-[88px] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
-                          style={{
-                            background: isUserActive(u) ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
-                            color: isUserActive(u) ? "#22c55e" : "#ef4444",
-                            border: `1px solid ${isUserActive(u) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
-                          }}
-                          title={u.id === user.id ? "You cannot deactivate your own account" : undefined}
-                        >
-                          {statusUpdatingId === u.id ? (
-                            <>
-                              <Loader2 size={12} className="animate-spin" />
-                              Updating...
-                            </>
-                          ) : isUserActive(u) ? (
-                            "Active"
-                          ) : (
-                            "Deactive"
-                          )}
-                        </button>
+                        {isUserActive(u) ? (
+                          <button
+                            type="button"
+                            disabled={statusUpdatingId === u.id || u.id === user.id}
+                            onClick={() => openDeactivateDialog(u)}
+                            className="inline-flex min-w-[88px] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                            style={{
+                              background: "rgba(34,197,94,0.12)",
+                              color: "#22c55e",
+                              border: "1px solid rgba(34,197,94,0.25)",
+                            }}
+                            title={u.id === user.id ? "You cannot deactivate your own account" : "Deactivate this user"}
+                          >
+                            Active
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={statusUpdatingId === u.id}
+                            onClick={() => handleReactivate(u)}
+                            className="inline-flex min-w-[88px] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                            style={{
+                              background: "rgba(239,68,68,0.12)",
+                              color: "#ef4444",
+                              border: "1px solid rgba(239,68,68,0.25)",
+                            }}
+                          >
+                            {statusUpdatingId === u.id ? (
+                              <>
+                                <Loader2 size={12} className="animate-spin" />
+                                Updating...
+                              </>
+                            ) : (
+                              "Deactive"
+                            )}
+                          </button>
+                        )}
                       </td>
-                      <td className="px-5 py-4 text-sm" style={{ color: isEmailVerified(u) ? "#22c55e" : "#f59e0b" }}>
-                        {isEmailVerified(u) ? "Verified" : "Unverified"}
+                      <td className="px-5 py-4">
+                        <span
+                          className="text-sm"
+                          style={{ color: isEmailVerified(u) ? "#22c55e" : "#f59e0b" }}
+                        >
+                          {isEmailVerified(u) ? "Verified" : "Unverified"}
+                        </span>
                       </td>
                       <td className="px-5 py-4">
                         <input
@@ -626,88 +644,99 @@ export default function AdminPage() {
         )}
       </main>
 
-      {deactivateTarget && (
-        <div
-          className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 p-4"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closeDeactivateDialog();
-          }}
-        >
-          <div className="glass-panel w-full max-w-md overflow-hidden rounded-2xl p-0">
+      {deactivateTarget &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) closeDeactivateDialog();
+            }}
+          >
             <div
-              className="p-5"
-              style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-sunken)" }}
+              className="glass-panel w-full max-w-md overflow-hidden rounded-2xl p-0"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="deactivate-dialog-title"
             >
-              <h3 className="text-lg font-semibold">Deactivate account</h3>
-              <p className="mt-1 text-sm" style={{ color: "var(--fg-muted)" }}>
-                {deactivateTarget.username} ({deactivateTarget.email})
-              </p>
-            </div>
-
-            <div className="space-y-4 p-5">
-              <div>
-                <p className="mb-2 text-sm font-medium">Reason</p>
-                <select
-                  value={deactivateReason}
-                  onChange={(e) =>
-                    setDeactivateReason(e.target.value as (typeof DEACTIVATION_REASONS)[number])
-                  }
-                  disabled={statusUpdatingId === deactivateTarget.id}
-                  className="input-field h-10 w-full px-3 text-sm"
-                >
-                  {DEACTIVATION_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ))}
-                </select>
+              <div
+                className="p-5"
+                style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-sunken)" }}
+              >
+                <h3 id="deactivate-dialog-title" className="text-lg font-semibold">
+                  Deactivate account
+                </h3>
+                <p className="mt-1 text-sm" style={{ color: "var(--fg-muted)" }}>
+                  {deactivateTarget.username} ({deactivateTarget.email})
+                </p>
               </div>
 
-              {deactivateReason === "Other" && (
+              <div className="space-y-4 p-5">
                 <div>
-                  <p className="mb-2 text-sm font-medium">Custom reason</p>
-                  <textarea
-                    value={deactivateCustomReason}
-                    onChange={(e) => setDeactivateCustomReason(e.target.value)}
+                  <p className="mb-2 text-sm font-medium">Reason</p>
+                  <select
+                    value={deactivateReason}
+                    onChange={(e) =>
+                      setDeactivateReason(e.target.value as (typeof DEACTIVATION_REASONS)[number])
+                    }
                     disabled={statusUpdatingId === deactivateTarget.id}
-                    className="input-field min-h-[96px] w-full px-3 py-2 text-sm"
-                    placeholder="Describe why this account is being deactivated..."
-                  />
+                    className="input-field h-10 w-full px-3 text-sm"
+                  >
+                    {DEACTIVATION_REASONS.map((reason) => (
+                      <option key={reason} value={reason}>
+                        {reason}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
 
-              <p className="text-xs" style={{ color: "var(--fg-muted)" }}>
-                The user will receive an email with the selected reason.
-              </p>
+                {deactivateReason === "Other" && (
+                  <div>
+                    <p className="mb-2 text-sm font-medium">Custom reason</p>
+                    <textarea
+                      value={deactivateCustomReason}
+                      onChange={(e) => setDeactivateCustomReason(e.target.value)}
+                      disabled={statusUpdatingId === deactivateTarget.id}
+                      className="input-field min-h-[96px] w-full px-3 py-2 text-sm"
+                      placeholder="Describe why this account is being deactivated..."
+                    />
+                  </div>
+                )}
 
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  onClick={closeDeactivateDialog}
-                  disabled={statusUpdatingId === deactivateTarget.id}
-                  className="btn-ghost rounded-lg px-4 py-2 text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => void confirmDeactivate()}
-                  disabled={statusUpdatingId === deactivateTarget.id}
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white"
-                  style={{ background: "#ef4444" }}
-                >
-                  {statusUpdatingId === deactivateTarget.id ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Deactivating...
-                    </>
-                  ) : (
-                    "Deactivate"
-                  )}
-                </button>
+                <p className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                  The user will receive an email with the selected reason.
+                </p>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={closeDeactivateDialog}
+                    disabled={statusUpdatingId === deactivateTarget.id}
+                    className="btn-ghost rounded-lg px-4 py-2 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void confirmDeactivate()}
+                    disabled={statusUpdatingId === deactivateTarget.id}
+                    className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white"
+                    style={{ background: "#ef4444" }}
+                  >
+                    {statusUpdatingId === deactivateTarget.id ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Deactivating...
+                      </>
+                    ) : (
+                      "Deactivate"
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {additionalDataUserId !== null && (
         <div
