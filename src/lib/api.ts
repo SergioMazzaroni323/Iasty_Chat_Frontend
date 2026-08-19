@@ -18,6 +18,7 @@ export interface AdminStats {
   total_chats: number;
   guest_chats: number;
   total_messages: number;
+  total_tokens: number;
 }
 
 export interface AdminUser {
@@ -27,6 +28,8 @@ export interface AdminUser {
   plan: "free" | "plus";
   is_admin: boolean;
   chat_count: number;
+  token_used: number;
+  additional_data_count: number;
   created_at: string;
 }
 
@@ -36,6 +39,7 @@ export interface AdminChat {
   user_id: number | null;
   username: string | null;
   message_count: number;
+  token_used: number;
   created_at: string;
   updated_at: string;
 }
@@ -404,9 +408,31 @@ export const api = {
     request<AdminUser>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteUser: (id: number) =>
     request<{ ok: boolean }>(`/admin/users/${id}`, { method: "DELETE" }),
-  adminChats: () => request<AdminChat[]>("/admin/chats"),
+  adminChats: (params?: {
+    search?: string;
+    user_id?: number;
+    include_guests?: boolean;
+    min_tokens?: number;
+    max_tokens?: number;
+    min_messages?: number;
+    max_messages?: number;
+    sort_by?: "updated_at" | "created_at" | "message_count" | "token_used";
+    sort_dir?: "asc" | "desc";
+    limit?: number;
+  }) => {
+    const p = new URLSearchParams();
+    if (!params) return request<AdminChat[]>("/admin/chats");
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === null) continue;
+      p.set(k, typeof v === "boolean" ? String(v) : String(v));
+    }
+    const qs = p.toString();
+    return request<AdminChat[]>(`/admin/chats${qs ? `?${qs}` : ""}`);
+  },
   adminDeleteChat: (id: number) =>
     request<{ ok: boolean }>(`/admin/chats/${id}`, { method: "DELETE" }),
+  adminUserAdditionalData: (userId: number) =>
+    request<AdditionalDataItem[]>(`/admin/users/${userId}/additional-data`),
 };
 
 export function saveToken(token: string) {

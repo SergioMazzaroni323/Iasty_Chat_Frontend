@@ -10,7 +10,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { AdminChat, AdminStats, AdminUser, api } from "@/lib/api";
+import { AdditionalDataItem, AdminChat, AdminStats, AdminUser, api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 
 type Tab = "dashboard" | "users" | "chats";
@@ -24,6 +24,22 @@ export default function AdminPage() {
   const [chats, setChats] = useState<AdminChat[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [chatsBusy, setChatsBusy] = useState(false);
+
+  const [chatSearch, setChatSearch] = useState("");
+  const [chatUserFilter, setChatUserFilter] = useState<number | "">("");
+  const [chatIncludeGuests, setChatIncludeGuests] = useState(false);
+  const [minTokens, setMinTokens] = useState("");
+  const [maxTokens, setMaxTokens] = useState("");
+  const [minMessages, setMinMessages] = useState("");
+  const [maxMessages, setMaxMessages] = useState("");
+  const [sortBy, setSortBy] = useState<"updated_at" | "created_at" | "message_count" | "token_used">("updated_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const [additionalDataUserId, setAdditionalDataUserId] = useState<number | null>(null);
+  const [additionalDataBusy, setAdditionalDataBusy] = useState(false);
+  const [additionalDataItems, setAdditionalDataItems] = useState<AdditionalDataItem[]>([]);
+  const [additionalDataError, setAdditionalDataError] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -38,6 +54,52 @@ export default function AdminPage() {
       setChats(c);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data");
+    }
+  }, []);
+
+  const loadChatsWithFilters = useCallback(async () => {
+    setChatsBusy(true);
+    setError("");
+    try {
+      const toIntOrUndef = (v: string) => {
+        if (!v.trim()) return undefined;
+        const n = Number(v);
+        if (Number.isNaN(n)) return undefined;
+        return n;
+      };
+
+      const userId = chatUserFilter === "" ? undefined : chatUserFilter;
+      const c = await api.adminChats({
+        search: chatSearch.trim() || undefined,
+        user_id: userId,
+        include_guests: chatIncludeGuests,
+        min_tokens: toIntOrUndef(minTokens),
+        max_tokens: toIntOrUndef(maxTokens),
+        min_messages: toIntOrUndef(minMessages),
+        max_messages: toIntOrUndef(maxMessages),
+        sort_by: sortBy,
+        sort_dir: sortDir,
+      });
+      setChats(c);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load chats");
+    } finally {
+      setChatsBusy(false);
+    }
+  }, [chatIncludeGuests, chatSearch, chatUserFilter, maxMessages, maxTokens, minMessages, minTokens, sortBy, sortDir]);
+
+  const openAdditionalDataForUser = useCallback(async (userId: number) => {
+    setAdditionalDataUserId(userId);
+    setAdditionalDataError("");
+    setAdditionalDataItems([]);
+    setAdditionalDataBusy(true);
+    try {
+      const items = await api.adminUserAdditionalData(userId);
+      setAdditionalDataItems(items);
+    } catch (err) {
+      setAdditionalDataError(err instanceof Error ? err.message : "Failed to load additional data");
+    } finally {
+      setAdditionalDataBusy(false);
     }
   }, []);
 
@@ -182,6 +244,8 @@ export default function AdminPage() {
                     <th className="px-5 py-3.5 font-medium">Plan</th>
                     <th className="px-5 py-3.5 font-medium">Admin</th>
                     <th className="px-5 py-3.5 font-medium">Chats</th>
+                    <th className="px-5 py-3.5 font-medium">Tokens</th>
+                    <th className="px-5 py-3.5 font-medium">Additional data</th>
                     <th className="px-5 py-3.5 font-medium"></th>
                   </tr>
                 </thead>
@@ -219,6 +283,23 @@ export default function AdminPage() {
                       <td className="px-5 py-4 tabular-nums" style={{ color: "var(--fg-secondary)" }}>
                         {u.chat_count}
                       </td>
+                      <td className="px-5 py-4 tabular-nums" style={{ color: "var(--fg-secondary)" }}>
+                        {u.token_used}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="tabular-nums" style={{ color: "var(--fg-secondary)" }}>
+                            {u.additional_data_count}
+                          </span>
+                          <button
+                            disabled={additionalDataBusy || u.id === additionalDataUserId}
+                            onClick={() => openAdditionalDataForUser(u.id)}
+                            className="btn-ghost rounded-lg px-2 py-1 text-sm"
+                          >
+                            View
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-5 py-4">
                         <button
                           disabled={busy || u.id === user.id}
@@ -240,6 +321,122 @@ export default function AdminPage() {
         {tab === "chats" && (
           <div>
             <h2 className="mb-8 text-2xl font-semibold tracking-tight">Recent chats</h2>
+            <div className="mb-6 flex flex-wrap items-end gap-3">
+              <div>
+                <p className="mb-1 text-xs font-medium" style={{ color: "var(--fg-muted)" }}>
+                  Search
+                </p>
+                <input
+                  value={chatSearch}
+                  onChange={(e) => setChatSearch(e.target.value)}
+                  className="input-field h-9 w-56 px-3 text-sm"
+                  placeholder="Chat name..."
+                />
+              </div>
+
+              <div>
+                <p className="mb-1 text-xs font-medium" style={{ color: "var(--fg-muted)" }}>
+                  User
+                </p>
+                <select
+                  value={chatUserFilter}
+                  onChange={(e) => setChatUserFilter(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="input-field h-9 w-56 px-3 text-sm"
+                >
+                  <option value="">All registered users</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.username}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm" style={{ color: "var(--fg-muted)" }}>
+                <input
+                  type="checkbox"
+                  checked={chatIncludeGuests}
+                  onChange={(e) => setChatIncludeGuests(e.target.checked)}
+                />
+                Include guest chats
+              </label>
+
+              <div className="flex items-end gap-3">
+                <div>
+                  <p className="mb-1 text-xs font-medium" style={{ color: "var(--fg-muted)" }}>
+                    Tokens min/max
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      value={minTokens}
+                      onChange={(e) => setMinTokens(e.target.value)}
+                      className="input-field h-9 w-28 px-3 text-sm"
+                      placeholder="min"
+                    />
+                    <input
+                      value={maxTokens}
+                      onChange={(e) => setMaxTokens(e.target.value)}
+                      className="input-field h-9 w-28 px-3 text-sm"
+                      placeholder="max"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs font-medium" style={{ color: "var(--fg-muted)" }}>
+                    Messages min/max
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      value={minMessages}
+                      onChange={(e) => setMinMessages(e.target.value)}
+                      className="input-field h-9 w-28 px-3 text-sm"
+                      placeholder="min"
+                    />
+                    <input
+                      value={maxMessages}
+                      onChange={(e) => setMaxMessages(e.target.value)}
+                      className="input-field h-9 w-28 px-3 text-sm"
+                      placeholder="max"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-xs font-medium" style={{ color: "var(--fg-muted)" }}>
+                  Sort
+                </p>
+                <div className="flex gap-2">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                    className="input-field h-9 w-36 px-3 text-sm"
+                  >
+                    <option value="updated_at">Updated</option>
+                    <option value="created_at">Created</option>
+                    <option value="message_count">Messages</option>
+                    <option value="token_used">Tokens</option>
+                  </select>
+                  <select
+                    value={sortDir}
+                    onChange={(e) => setSortDir(e.target.value as typeof sortDir)}
+                    className="input-field h-9 w-20 px-3 text-sm"
+                  >
+                    <option value="desc">Desc</option>
+                    <option value="asc">Asc</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                disabled={chatsBusy || busy}
+                onClick={loadChatsWithFilters}
+                className="btn-primary h-9 px-4"
+              >
+                {chatsBusy ? "Loading..." : "Apply"}
+              </button>
+            </div>
             <div className="surface-3d overflow-hidden rounded-2xl">
               <table className="w-full min-w-[640px] text-left text-sm">
                 <thead style={{ background: "var(--bg-sunken)", color: "var(--fg-muted)" }}>
@@ -247,6 +444,7 @@ export default function AdminPage() {
                     <th className="px-5 py-3.5 font-medium">Name</th>
                     <th className="px-5 py-3.5 font-medium">Owner</th>
                     <th className="px-5 py-3.5 font-medium">Messages</th>
+                    <th className="px-5 py-3.5 font-medium">Tokens</th>
                     <th className="px-5 py-3.5 font-medium">Updated</th>
                     <th className="px-5 py-3.5 font-medium"></th>
                   </tr>
@@ -260,6 +458,9 @@ export default function AdminPage() {
                       </td>
                       <td className="px-5 py-4 tabular-nums" style={{ color: "var(--fg-secondary)" }}>
                         {c.message_count}
+                      </td>
+                      <td className="px-5 py-4 tabular-nums" style={{ color: "var(--fg-secondary)" }}>
+                        {c.token_used}
                       </td>
                       <td className="px-5 py-4 text-xs" style={{ color: "var(--fg-muted)" }}>
                         {new Date(c.updated_at).toLocaleString()}
@@ -282,6 +483,71 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+
+      {additionalDataUserId !== null && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setAdditionalDataUserId(null);
+          }}
+        >
+          <div className="glass-panel w-full max-w-3xl overflow-hidden rounded-2xl p-0">
+            <div
+              className="p-5"
+              style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-sunken)" }}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold">User additional data</h3>
+                  <p className="mt-1 text-xs" style={{ color: "var(--fg-muted)" }}>
+                    User: {additionalDataItems.length ? additionalDataItems[0].id : additionalDataUserId}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setAdditionalDataUserId(null)}
+                  className="btn-ghost rounded-lg px-3 py-2"
+                  disabled={additionalDataBusy}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-5">
+              {additionalDataBusy ? (
+                <div style={{ color: "var(--fg-muted)" }}>Loading...</div>
+              ) : additionalDataError ? (
+                <div style={{ color: "#ef4444" }}>{additionalDataError}</div>
+              ) : additionalDataItems.length === 0 ? (
+                <div style={{ color: "var(--fg-muted)" }}>No additional data for this user.</div>
+              ) : (
+                <div className="space-y-4">
+                  {additionalDataItems.map((item) => (
+                    <div key={item.id} className="rounded-xl" style={{ border: "1px solid var(--border-subtle)" }}>
+                      <div className="flex items-start justify-between gap-3 p-4">
+                        <div>
+                          <div className="font-medium">{item.name}</div>
+                          <div className="mt-1 text-xs" style={{ color: "var(--fg-muted)" }}>
+                            Updated: {new Date(item.updated_at).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="text-xs tabular-nums" style={{ color: "var(--fg-muted)" }}>
+                          #{item.id}
+                        </div>
+                      </div>
+                      <div className="border-t border-[var(--border-subtle)] px-4 py-3">
+                        <pre className="whitespace-pre-wrap text-sm" style={{ color: "var(--fg-primary)" }}>
+                          {item.content}
+                        </pre>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
