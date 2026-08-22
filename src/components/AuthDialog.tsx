@@ -59,9 +59,14 @@ export function AuthDialog({ open, onClose, onLogin, onRegister }: AuthDialogPro
         onClose();
         resetForm();
       } else if (mode === "register") {
-        const message = await onRegister(email, username, password);
-        setInfo(message);
-        switchMode("login");
+        await onRegister(email, username, password);
+        setMode("login");
+        setError("");
+        setConfirmPassword("");
+        setPassword("");
+        setInfo(
+          "Verification link sent to your email. Please check your inbox or Spam folder."
+        );
       } else {
         const res = await api.forgotPassword(email);
         setInfo(res.message);
