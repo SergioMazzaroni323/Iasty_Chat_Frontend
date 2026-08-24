@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-:root {
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root,
+[data-theme="light"] {
   --bg-base: #f0f2f6;
   --bg-elevated: #ffffff;
   --bg-sunken: #e8eaef;
@@ -19,8 +22,7 @@
   --shadow-btn: 0 1px 0 rgba(255, 255, 255, 0.15) inset, 0 2px 8px var(--accent-glow), 0 4px 16px rgba(99, 102, 241, 0.2);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+[data-theme="dark"] {
     --bg-base: #0c0e14;
     --bg-elevated: #151821;
     --bg-sunken: #0a0c10;
@@ -36,8 +38,7 @@
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25), 0 8px 32px rgba(0, 0, 0, 0.2);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.35), 0 24px 64px rgba(0, 0, 0, 0.25);
     --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 -1px 0 rgba(255, 255, 255, 0.04);
-    --shadow-btn: 0 1px 0 rgba(255, 255, 255, 0.1) inset, 0 2px 12px var(--accent-glow), 0 4px 20px rgba(99, 102, 241, 0.15);
-  }
+  --shadow-btn: 0 1px 0 rgba(255, 255, 255, 0.1) inset, 0 2px 12px var(--accent-glow), 0 4px 20px rgba(99, 102, 241, 0.15);
 }
 
 @theme inline {
@@ -58,13 +59,11 @@ body {
     var(--bg-base);
 }
 
-@media (prefers-color-scheme: dark) {
-  .app-shell {
-    background:
-      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(99, 102, 241, 0.12), transparent 50%),
-      radial-gradient(ellipse 60% 50% at 90% 100%, rgba(139, 92, 246, 0.08), transparent 50%),
-      var(--bg-base);
-  }
+[data-theme="dark"] .app-shell {
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 0%, rgba(99, 102, 241, 0.12), transparent 50%),
+    radial-gradient(ellipse 60% 50% at 90% 100%, rgba(139, 92, 246, 0.08), transparent 50%),
+    var(--bg-base);
 }
 
 .glass-panel {
@@ -82,10 +81,8 @@ body {
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-@media (prefers-color-scheme: dark) {
-  .surface-3d {
-    box-shadow: var(--shadow-md), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
-  }
+[data-theme="dark"] .surface-3d {
+  box-shadow: var(--shadow-md), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 }
 
 .surface-inset {
@@ -387,12 +384,10 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-@media (prefers-color-scheme: dark) {
-  .tooltip-3d {
-    background: #2a2f3d;
-    color: var(--fg-primary);
-    border: 1px solid var(--border-strong);
-  }
+[data-theme="dark"] .tooltip-3d {
+  background: #2a2f3d;
+  color: var(--fg-primary);
+  border: 1px solid var(--border-strong);
 }
 
 .badge {

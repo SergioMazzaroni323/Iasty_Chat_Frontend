@@ -13,7 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { AdditionalDataItem, AdminChat, AdminStats, AdminUser, api } from "@/lib/api";
-import { ToastHost, toast } from "@/components/Toast";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 
 type Tab = "dashboard" | "users" | "chats";
@@ -309,6 +309,9 @@ export default function AdminPage() {
           />
         </nav>
         <div className="p-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+          <div className="mb-2 flex justify-center">
+            <ThemeToggle showLabel />
+          </div>
           <Link
             href="/"
             className="dropdown-item rounded-xl"

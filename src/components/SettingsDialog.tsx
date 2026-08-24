@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X } from "lucide-react";
+import { Check, Moon, Sun, X } from "lucide-react";
 import { User, api } from "@/lib/api";
 import { PasswordField } from "./PasswordField";
+import { useTheme } from "@/hooks/useTheme";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -21,6 +22,7 @@ export function SettingsDialog({ open, user, onClose, onUpdated }: SettingsDialo
   const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   if (!open) return null;
 
@@ -108,6 +110,30 @@ export function SettingsDialog({ open, user, onClose, onUpdated }: SettingsDialo
                     Your email is not verified yet. Save a new email to receive a fresh verification link.
                   </p>
                 )}
+              </Field>
+              <Field label="Appearance">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setTheme("light")}
+                    disabled={theme === "light"}
+                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${
+                      theme === "light" ? "surface-inset" : "btn-ghost"
+                    }`}
+                  >
+                    <Sun size={15} />
+                    Light
+                  </button>
+                  <button
+                    onClick={() => setTheme("dark")}
+                    disabled={theme === "dark"}
+                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${
+                      theme === "dark" ? "surface-inset" : "btn-ghost"
+                    }`}
+                  >
+                    <Moon size={15} />
+                    Dark
+                  </button>
+                </div>
               </Field>
               <Field label="Account status">
                 <div className="flex items-center gap-3">

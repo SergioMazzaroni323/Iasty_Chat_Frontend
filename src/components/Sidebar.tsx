@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AdditionalDataItem, ChatFolder } from "@/lib/api";
 import { Chat, User } from "@/lib/api";
 import { UserFooter } from "./UserFooter";
+import { ThemeToggle } from "./ThemeToggle";
 
 const IASTY_LOGO_WHITE_SRC = "/branding/iasty-logo-white.png";
 const IASTY_LOGO_COLOR_SRC = "/branding/iasty-logo.png";
@@ -127,6 +128,7 @@ export function Sidebar({
               >
                 <ChevronRight size={17} />
               </button>
+              <ThemeToggle className="hidden md:inline-flex" />
             </>
           ) : (
             <>
@@ -158,6 +160,7 @@ export function Sidebar({
               >
                 <ChevronLeft size={17} />
               </button>
+              <ThemeToggle className="relative z-10 hidden md:inline-flex" />
             </>
           )}
         </div>
