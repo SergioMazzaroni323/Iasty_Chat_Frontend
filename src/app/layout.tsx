@@ -11,6 +11,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Iasty",
   description: "Iasty AI chatbot",
+  verification: {
+    google: "3wKl0uxBnrBmCRL-qWsqavhHfhDXi2daY0yqSFjcHL0",
+  },
   icons: {
     icon: [{ url: "/branding/iasty-icon.png", type: "image/png" }],
     shortcut: [{ url: "/branding/iasty-icon.png", type: "image/png" }],
