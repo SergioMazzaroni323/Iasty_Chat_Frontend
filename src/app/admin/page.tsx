@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { AdditionalDataItem, AdminChat, AdminStats, AdminUser, api } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ToastHost, toast } from "@/components/Toast";
 import { useAuth } from "@/hooks/useAuth";
 
 type Tab = "dashboard" | "users" | "chats";
