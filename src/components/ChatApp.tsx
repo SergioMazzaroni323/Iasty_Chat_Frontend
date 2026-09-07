@@ -19,8 +19,8 @@ import {
   api,
   AdditionalDataItem,
   AppConfig,
-  ChatAttachment,
   Chat,
+  ChatAttachment,
   ChatFolder,
   getVoiceReplyEnabled,
   setVoiceReplyEnabled,
@@ -353,7 +353,9 @@ export function ChatApp() {
     voiceControlsRef.current?.stopListening();
 
     if (chatName === "New Chat") {
-      const newName = deriveChatName(content || attachment?.filename || "New Chat");
+      const newName = deriveChatName(
+        content || attachment?.filename || (attachment?.kind === "image" ? "Image Chat" : "PDF Chat")
+      );
       setChatName(newName);
       updateChatInList(chatId, newName);
     }
@@ -369,7 +371,6 @@ export function ChatApp() {
         content,
         attachmentName: attachment?.filename,
         attachmentKind: attachment?.kind,
-        attachmentPreviewUrl: attachment?.kind === "image" ? attachment.dataUrl : undefined,
         searchUrl: undefined,
         createdAt: userCreatedAt,
       },

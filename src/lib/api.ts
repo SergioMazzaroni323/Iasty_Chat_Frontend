@@ -105,6 +105,7 @@ export interface AttachedPdf {
 export interface AttachedImage {
   kind: "image";
   filename: string;
+  mime: string;
   dataUrl: string;
 }
 
@@ -383,6 +384,7 @@ export const api = {
     } else if (attachment?.kind === "image") {
       body.image_data_url = attachment.dataUrl;
       body.image_filename = attachment.filename;
+      body.image_mime = attachment.mime;
     }
 
     const res = await fetch(`${API_URL}/chats/${chatId}/messages`, {

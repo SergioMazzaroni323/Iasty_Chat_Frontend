@@ -1,16 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, FileText, Globe, ImageIcon, Mic, Paperclip, Send, Volume2, X } from "lucide-react";
-import {
-  AttachedImage,
-  AttachedPdf,
-  ChatAttachment,
-  api,
-  getSendMode,
-  SendMode,
-  setSendMode,
-} from "@/lib/api";
+import { ChevronDown, FileText, Globe, Image as ImageIcon, Mic, Paperclip, Send, Volume2, X } from "lucide-react";
+import { ChatAttachment, api, getSendMode, SendMode, setSendMode } from "@/lib/api";
 import { formatApiError } from "@/lib/formatError";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { AdditionalDataMultiSelect } from "./AdditionalDataMultiSelect";
@@ -18,8 +10,30 @@ import { HoverChip } from "./HoverChip";
 
 const MAX_LINES = 5;
 const MODEL_UNAVAILABLE = "This model didn't available at this version";
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const IMAGE_ACCEPT = "image/png,image/jpeg,image/jpg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif";
+const FILE_ACCEPT = `.pdf,application/pdf,${IMAGE_ACCEPT}`;
+
+function isPdfFile(file: File): boolean {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function isImageFile(file: File): boolean {
+  if (file.type.startsWith("image/")) return true;
+  return /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Failed to read image"));
+    };
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.readAsDataURL(file);
+  });
+}
 
 export type VoiceControls = {
   startListening: () => void;
@@ -45,18 +59,6 @@ interface InputBarProps {
   onSend: (content: string, attachment?: ChatAttachment) => void;
   disabled?: boolean;
   initialValue?: string;
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Failed to read image"));
-    };
-    reader.onerror = () => reject(new Error("Failed to read image"));
-    reader.readAsDataURL(file);
-  });
 }
 
 export function InputBar({
@@ -179,39 +181,33 @@ export function InputBar({
     setParsingAttachment(true);
     setAttachError("");
     try {
-      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-      const isImage =
-        file.type.startsWith("image/") ||
-        /\.(png|jpe?g|webp|gif)$/i.test(file.name);
-
-      if (isPdf) {
+      if (isPdfFile(file)) {
         const parsed = await api.parsePdf(file);
-        const next: AttachedPdf = {
+        setAttachment({
           kind: "pdf",
           filename: parsed.filename,
           text: parsed.text,
           pageCount: parsed.page_count,
           tokenEstimate: parsed.token_estimate,
-        };
-        setAttachment(next);
+        });
         return;
       }
 
-      if (isImage) {
-        if (file.size > MAX_IMAGE_BYTES) {
-          throw new Error("Image exceeds 5MB limit");
-        }
-        const dataUrl = await readFileAsDataUrl(file);
-        const next: AttachedImage = {
-          kind: "image",
-          filename: file.name,
-          dataUrl,
-        };
-        setAttachment(next);
-        return;
+      if (!isImageFile(file)) {
+        throw new Error("Unsupported file. Attach a PDF or image (PNG, JPEG, WEBP, GIF).");
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        throw new Error("Image exceeds 4MB limit");
       }
 
-      throw new Error("Unsupported file. Attach a PDF or image (PNG, JPEG, WebP, GIF).");
+      const dataUrl = await readFileAsDataUrl(file);
+      const mime = file.type || "image/jpeg";
+      setAttachment({
+        kind: "image",
+        filename: file.name || "image",
+        mime,
+        dataUrl,
+      });
     } catch (err) {
       setAttachError(err instanceof Error ? formatApiError(err.message) : "Failed to attach file");
       setAttachment(null);
@@ -219,7 +215,6 @@ export function InputBar({
       setParsingAttachment(false);
     }
   };
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const enterToSend = sendMode === "enter";
     const isSendKey = enterToSend
@@ -325,12 +320,12 @@ export function InputBar({
         <input
           ref={fileInputRef}
           type="file"
-          accept={`.pdf,application/pdf,${IMAGE_ACCEPT}`}
+          accept={FILE_ACCEPT}
           className="hidden"
           onChange={handleFileSelect}
         />
 
-        {attachment && (
+        {attachment?.kind === "pdf" && (
           <div
             className="flex items-center gap-2 px-4 pt-3"
             style={{ borderBottom: "1px solid var(--border-subtle)" }}
@@ -342,38 +337,60 @@ export function InputBar({
                 border: "1px solid color-mix(in srgb, var(--accent-from) 15%, transparent)",
               }}
             >
-              {attachment.kind === "image" ? (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={attachment.dataUrl}
-                    alt={attachment.filename}
-                    className="h-10 w-10 rounded-md object-cover"
-                  />
-                  <span className="min-w-0 truncate" style={{ color: "var(--fg-primary)" }}>
-                    {attachment.filename}
-                  </span>
-                  <span className="shrink-0 text-xs" style={{ color: "var(--fg-muted)" }}>
-                    Image
-                  </span>
-                </>
-              ) : (
-                <>
-                  <FileText size={15} style={{ color: "var(--accent-from)" }} />
-                  <span className="min-w-0 truncate" style={{ color: "var(--fg-primary)" }}>
-                    {attachment.filename}
-                  </span>
-                  <span className="shrink-0 text-xs" style={{ color: "var(--fg-muted)" }}>
-                    {attachment.pageCount} pg · ~{attachment.tokenEstimate.toLocaleString()} tokens
-                  </span>
-                </>
-              )}
+              <FileText size={15} style={{ color: "var(--accent-from)" }} />
+              <span className="min-w-0 truncate" style={{ color: "var(--fg-primary)" }}>
+                {attachment.filename}
+              </span>
+              <span className="shrink-0 text-xs" style={{ color: "var(--fg-muted)" }}>
+                {attachment.pageCount} pg · ~{attachment.tokenEstimate.toLocaleString()} tokens
+              </span>
             </div>
             <button
               type="button"
               onClick={() => setAttachment(null)}
               className="btn-icon h-8 w-8"
-              aria-label="Remove attachment"
+              aria-label="Remove PDF"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {attachment?.kind === "image" && (
+          <div
+            className="flex items-center gap-2 px-4 pt-3"
+            style={{ borderBottom: "1px solid var(--border-subtle)" }}
+          >
+            <div
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2 text-sm"
+              style={{
+                background: "color-mix(in srgb, var(--accent-from) 8%, var(--bg-elevated))",
+                border: "1px solid color-mix(in srgb, var(--accent-from) 15%, transparent)",
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={attachment.dataUrl}
+                alt={attachment.filename}
+                className="h-10 w-10 shrink-0 rounded-lg object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <ImageIcon size={13} style={{ color: "var(--accent-from)" }} />
+                  <span className="truncate" style={{ color: "var(--fg-primary)" }}>
+                    {attachment.filename}
+                  </span>
+                </div>
+                <p className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                  Use a vision model (GPT-4o, Claude, Gemini…)
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAttachment(null)}
+              className="btn-icon h-8 w-8"
+              aria-label="Remove image"
             >
               <X size={14} />
             </button>
@@ -391,13 +408,7 @@ export function InputBar({
           value={composedValue}
           onChange={(e) => handleTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={
-            listening
-              ? "Listening..."
-              : attachment?.kind === "image"
-                ? "Ask about this image..."
-                : "Ask anything..."
-          }
+          placeholder={listening ? "Listening..." : "Ask anything..."}
           rows={1}
           disabled={disabled}
           className="block min-h-[52px] w-full resize-none bg-transparent px-5 py-4 text-[0.9375rem] leading-relaxed outline-none"
@@ -417,7 +428,7 @@ export function InputBar({
                 aria-label="Attach PDF or image"
                 className={`btn-icon h-9 w-9 ${attachment ? "active" : ""} ${disabled || parsingAttachment ? "cursor-not-allowed opacity-40" : ""}`}
               >
-                {attachment?.kind === "image" ? <ImageIcon size={16} /> : <Paperclip size={16} />}
+                <Paperclip size={16} />
               </button>
             </HoverChip>
 
