@@ -19,7 +19,7 @@ import {
   api,
   AdditionalDataItem,
   AppConfig,
-  AttachedPdf,
+  ChatAttachment,
   Chat,
   ChatFolder,
   getVoiceReplyEnabled,
@@ -148,6 +148,7 @@ export function ChatApp() {
           role: m.role,
           content: parsed.text,
           attachmentName: parsed.attachmentName,
+          attachmentKind: parsed.attachmentKind,
           tokenCount: m.token_count,
           createdAt: m.created_at,
         };
@@ -330,7 +331,7 @@ export function ChatApp() {
     );
   };
 
-  const handleSend = async (content: string, document?: AttachedPdf) => {
+  const handleSend = async (content: string, attachment?: ChatAttachment) => {
     if (sending) return;
 
     const useWebSearch = webSearch;
@@ -352,7 +353,7 @@ export function ChatApp() {
     voiceControlsRef.current?.stopListening();
 
     if (chatName === "New Chat") {
-      const newName = deriveChatName(content || document?.filename || "PDF Chat");
+      const newName = deriveChatName(content || attachment?.filename || "New Chat");
       setChatName(newName);
       updateChatInList(chatId, newName);
     }
@@ -366,7 +367,9 @@ export function ChatApp() {
         id: userMsgId,
         role: "user",
         content,
-        attachmentName: document?.filename,
+        attachmentName: attachment?.filename,
+        attachmentKind: attachment?.kind,
+        attachmentPreviewUrl: attachment?.kind === "image" ? attachment.dataUrl : undefined,
         searchUrl: undefined,
         createdAt: userCreatedAt,
       },
@@ -402,7 +405,7 @@ export function ChatApp() {
         selectedModel,
         useWebSearch,
         editMessageId ?? undefined,
-        document,
+        attachment,
         selectedRagDataIds
       );
 

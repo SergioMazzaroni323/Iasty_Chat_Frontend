@@ -95,11 +95,20 @@ export interface ParsedPdf {
 }
 
 export interface AttachedPdf {
+  kind: "pdf";
   filename: string;
   text: string;
   pageCount: number;
   tokenEstimate: number;
 }
+
+export interface AttachedImage {
+  kind: "image";
+  filename: string;
+  dataUrl: string;
+}
+
+export type ChatAttachment = AttachedPdf | AttachedImage;
 
 export interface AdditionalDataItem {
   id: number;
@@ -352,26 +361,34 @@ export const api = {
     model: string,
     webSearch: boolean,
     editMessageId?: number,
-    document?: AttachedPdf,
+    attachment?: ChatAttachment,
     additionalDataIds: number[] = []
   ) {
     const token = getToken();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
 
+    const body: Record<string, unknown> = {
+      content,
+      model,
+      web_search: webSearch,
+      guest_id: token ? null : getGuestId(),
+      edit_message_id: editMessageId ?? null,
+      additional_data_ids: additionalDataIds,
+    };
+
+    if (attachment?.kind === "pdf") {
+      body.document_text = attachment.text;
+      body.document_filename = attachment.filename;
+    } else if (attachment?.kind === "image") {
+      body.image_data_url = attachment.dataUrl;
+      body.image_filename = attachment.filename;
+    }
+
     const res = await fetch(`${API_URL}/chats/${chatId}/messages`, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        content,
-        model,
-        web_search: webSearch,
-        guest_id: token ? null : getGuestId(),
-        edit_message_id: editMessageId ?? null,
-        document_text: document?.text ?? null,
-        document_filename: document?.filename ?? null,
-        additional_data_ids: additionalDataIds,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {

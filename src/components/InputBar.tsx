@@ -1,14 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, FileText, Globe, Mic, Send, Volume2, X } from "lucide-react";
-import { AttachedPdf, api, getSendMode, SendMode, setSendMode } from "@/lib/api";
+import { ChevronDown, FileText, Globe, ImageIcon, Mic, Paperclip, Send, Volume2, X } from "lucide-react";
+import {
+  AttachedImage,
+  AttachedPdf,
+  ChatAttachment,
+  api,
+  getSendMode,
+  SendMode,
+  setSendMode,
+} from "@/lib/api";
 import { formatApiError } from "@/lib/formatError";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { AdditionalDataMultiSelect } from "./AdditionalDataMultiSelect";
 import { HoverChip } from "./HoverChip";
+
 const MAX_LINES = 5;
 const MODEL_UNAVAILABLE = "This model didn't available at this version";
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_ACCEPT = "image/png,image/jpeg,image/jpg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif";
 
 export type VoiceControls = {
   startListening: () => void;
@@ -31,9 +42,21 @@ interface InputBarProps {
   voiceReplySupported: boolean;
   onVoiceReplyToggle: () => void;
   onRegisterVoiceControls?: (controls: VoiceControls) => void;
-  onSend: (content: string, document?: AttachedPdf) => void;
+  onSend: (content: string, attachment?: ChatAttachment) => void;
   disabled?: boolean;
   initialValue?: string;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Failed to read image"));
+    };
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.readAsDataURL(file);
+  });
 }
 
 export function InputBar({
@@ -60,9 +83,9 @@ export function InputBar({
   const [sendMode, setSendModeState] = useState<SendMode>("enter");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [attachedPdf, setAttachedPdf] = useState<AttachedPdf | null>(null);
-  const [parsingPdf, setParsingPdf] = useState(false);
-  const [pdfError, setPdfError] = useState("");
+  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
+  const [parsingAttachment, setParsingAttachment] = useState(false);
+  const [attachError, setAttachError] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
@@ -80,8 +103,8 @@ export function InputBar({
 
   const valueRef = useRef(value);
   valueRef.current = value;
-  const attachedPdfRef = useRef(attachedPdf);
-  attachedPdfRef.current = attachedPdf;
+  const attachmentRef = useRef(attachment);
+  attachmentRef.current = attachment;
 
   const composedValue =
     value + (interimTranscript ? `${value && !value.endsWith(" ") ? " " : ""}${interimTranscript}` : "");
@@ -134,11 +157,11 @@ export function InputBar({
   const handleSend = useCallback(() => {
     stopSpeech();
     const trimmed = valueRef.current.trim();
-    if ((!trimmed && !attachedPdfRef.current) || disabled || parsingPdf) return;
-    onSend(trimmed, attachedPdfRef.current ?? undefined);
+    if ((!trimmed && !attachmentRef.current) || disabled || parsingAttachment) return;
+    onSend(trimmed, attachmentRef.current ?? undefined);
     setValue("");
-    setAttachedPdf(null);
-    setPdfError("");
+    setAttachment(null);
+    setAttachError("");
     clearSpeechError();
     requestAnimationFrame(() => {
       if (textareaRef.current) {
@@ -146,30 +169,57 @@ export function InputBar({
         textareaRef.current.style.overflowY = "hidden";
       }
     });
-  }, [clearSpeechError, disabled, onSend, parsingPdf, stopSpeech]);
+  }, [clearSpeechError, disabled, onSend, parsingAttachment, stopSpeech]);
 
-  const handlePdfSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
 
-    setParsingPdf(true);
-    setPdfError("");
+    setParsingAttachment(true);
+    setAttachError("");
     try {
-      const parsed = await api.parsePdf(file);
-      setAttachedPdf({
-        filename: parsed.filename,
-        text: parsed.text,
-        pageCount: parsed.page_count,
-        tokenEstimate: parsed.token_estimate,
-      });
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      const isImage =
+        file.type.startsWith("image/") ||
+        /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+
+      if (isPdf) {
+        const parsed = await api.parsePdf(file);
+        const next: AttachedPdf = {
+          kind: "pdf",
+          filename: parsed.filename,
+          text: parsed.text,
+          pageCount: parsed.page_count,
+          tokenEstimate: parsed.token_estimate,
+        };
+        setAttachment(next);
+        return;
+      }
+
+      if (isImage) {
+        if (file.size > MAX_IMAGE_BYTES) {
+          throw new Error("Image exceeds 5MB limit");
+        }
+        const dataUrl = await readFileAsDataUrl(file);
+        const next: AttachedImage = {
+          kind: "image",
+          filename: file.name,
+          dataUrl,
+        };
+        setAttachment(next);
+        return;
+      }
+
+      throw new Error("Unsupported file. Attach a PDF or image (PNG, JPEG, WebP, GIF).");
     } catch (err) {
-      setPdfError(err instanceof Error ? formatApiError(err.message) : "Failed to parse PDF");
-      setAttachedPdf(null);
+      setAttachError(err instanceof Error ? formatApiError(err.message) : "Failed to attach file");
+      setAttachment(null);
     } finally {
-      setParsingPdf(false);
+      setParsingAttachment(false);
     }
   };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const enterToSend = sendMode === "enter";
     const isSendKey = enterToSend
@@ -218,20 +268,20 @@ export function InputBar({
     if (!voiceReplyEnabled) return;
     requestAnimationFrame(() => {
       const trimmed = valueRef.current.trim();
-      if (trimmed && !disabled && !parsingPdf && !attachedPdfRef.current) {
+      if (trimmed && !disabled && !parsingAttachment && !attachmentRef.current) {
         handleSend();
       }
     });
-  }, [disabled, handleSend, parsingPdf, voiceReplyEnabled]);
+  }, [disabled, handleSend, parsingAttachment, voiceReplyEnabled]);
 
   const beginVoiceInput = useCallback(() => {
-    if (!speechSupported || disabled || parsingPdf) return;
+    if (!speechSupported || disabled || parsingAttachment) return;
     startSpeech(appendFinalTranscript, handleVoiceSessionEnd);
   }, [
     appendFinalTranscript,
     disabled,
     handleVoiceSessionEnd,
-    parsingPdf,
+    parsingAttachment,
     speechSupported,
     startSpeech,
   ]);
@@ -265,8 +315,8 @@ export function InputBar({
         ? "Start listening"
         : "Voice input";
 
-  const canSend = Boolean(value.trim() || attachedPdf);
-  const voiceInputDisabled = disabled || parsingPdf || !speechSupported;
+  const canSend = Boolean(value.trim() || attachment);
+  const voiceInputDisabled = disabled || parsingAttachment || !speechSupported;
   const voiceModeDisabled = disabled || !voiceModeSupported;
 
   return (
@@ -275,12 +325,12 @@ export function InputBar({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,application/pdf"
+          accept={`.pdf,application/pdf,${IMAGE_ACCEPT}`}
           className="hidden"
-          onChange={handlePdfSelect}
+          onChange={handleFileSelect}
         />
 
-        {attachedPdf && (
+        {attachment && (
           <div
             className="flex items-center gap-2 px-4 pt-3"
             style={{ borderBottom: "1px solid var(--border-subtle)" }}
@@ -292,28 +342,47 @@ export function InputBar({
                 border: "1px solid color-mix(in srgb, var(--accent-from) 15%, transparent)",
               }}
             >
-              <FileText size={15} style={{ color: "var(--accent-from)" }} />
-              <span className="min-w-0 truncate" style={{ color: "var(--fg-primary)" }}>
-                {attachedPdf.filename}
-              </span>
-              <span className="shrink-0 text-xs" style={{ color: "var(--fg-muted)" }}>
-                {attachedPdf.pageCount} pg · ~{attachedPdf.tokenEstimate.toLocaleString()} tokens
-              </span>
+              {attachment.kind === "image" ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={attachment.dataUrl}
+                    alt={attachment.filename}
+                    className="h-10 w-10 rounded-md object-cover"
+                  />
+                  <span className="min-w-0 truncate" style={{ color: "var(--fg-primary)" }}>
+                    {attachment.filename}
+                  </span>
+                  <span className="shrink-0 text-xs" style={{ color: "var(--fg-muted)" }}>
+                    Image
+                  </span>
+                </>
+              ) : (
+                <>
+                  <FileText size={15} style={{ color: "var(--accent-from)" }} />
+                  <span className="min-w-0 truncate" style={{ color: "var(--fg-primary)" }}>
+                    {attachment.filename}
+                  </span>
+                  <span className="shrink-0 text-xs" style={{ color: "var(--fg-muted)" }}>
+                    {attachment.pageCount} pg · ~{attachment.tokenEstimate.toLocaleString()} tokens
+                  </span>
+                </>
+              )}
             </div>
             <button
               type="button"
-              onClick={() => setAttachedPdf(null)}
+              onClick={() => setAttachment(null)}
               className="btn-icon h-8 w-8"
-              aria-label="Remove PDF"
+              aria-label="Remove attachment"
             >
               <X size={14} />
             </button>
           </div>
         )}
 
-        {(pdfError || speechError) && (
+        {(attachError || speechError) && (
           <p className="px-4 pt-3 text-xs" style={{ color: "#ef4444" }}>
-            {pdfError || speechError}
+            {attachError || speechError}
           </p>
         )}
 
@@ -322,7 +391,13 @@ export function InputBar({
           value={composedValue}
           onChange={(e) => handleTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={listening ? "Listening..." : "Ask anything..."}
+          placeholder={
+            listening
+              ? "Listening..."
+              : attachment?.kind === "image"
+                ? "Ask about this image..."
+                : "Ask anything..."
+          }
           rows={1}
           disabled={disabled}
           className="block min-h-[52px] w-full resize-none bg-transparent px-5 py-4 text-[0.9375rem] leading-relaxed outline-none"
@@ -334,15 +409,15 @@ export function InputBar({
           style={{ borderTop: "1px solid var(--border-subtle)" }}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-visible">
-            <HoverChip label="Attach PDF" icon={<FileText size={13} />} placement="top">
+            <HoverChip label="Attach PDF or image" icon={<Paperclip size={13} />} placement="top">
               <button
                 type="button"
-                disabled={disabled || parsingPdf}
+                disabled={disabled || parsingAttachment}
                 onClick={() => fileInputRef.current?.click()}
-                aria-label="Attach PDF"
-                className={`btn-icon h-9 w-9 ${attachedPdf ? "active" : ""} ${disabled || parsingPdf ? "cursor-not-allowed opacity-40" : ""}`}
+                aria-label="Attach PDF or image"
+                className={`btn-icon h-9 w-9 ${attachment ? "active" : ""} ${disabled || parsingAttachment ? "cursor-not-allowed opacity-40" : ""}`}
               >
-                <FileText size={16} />
+                {attachment?.kind === "image" ? <ImageIcon size={16} /> : <Paperclip size={16} />}
               </button>
             </HoverChip>
 
@@ -440,7 +515,7 @@ export function InputBar({
             <button
               type="button"
               onClick={handleSend}
-              disabled={disabled || !canSend || parsingPdf}
+              disabled={disabled || !canSend || parsingAttachment}
               className="btn-primary flex h-9 items-center gap-2 rounded-l-xl rounded-r-none px-4 text-sm"
             >
               <Send size={15} />

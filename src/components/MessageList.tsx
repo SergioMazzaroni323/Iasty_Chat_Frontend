@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Copy, FileText, Pencil } from "lucide-react";
+import { Loader2, Copy, FileText, ImageIcon, Pencil } from "lucide-react";
 import { useState } from "react";
 import { formatMessageTime, formatMessageTimeFull } from "@/lib/formatTime";
 import { MarkdownContent } from "./MarkdownContent";
@@ -13,6 +13,8 @@ export interface DisplayMessage {
   tokenCount?: number;
   createdAt?: string;
   attachmentName?: string;
+  attachmentKind?: "pdf" | "image";
+  attachmentPreviewUrl?: string;
 }
 
 interface MessageListProps {
@@ -54,11 +56,25 @@ function MessageItem({
           )}
           {message.attachmentName && (
             <div
-              className={`flex items-center gap-2 text-xs ${message.content ? "mt-2" : ""}`}
+              className={`flex flex-col gap-2 text-xs ${message.content ? "mt-2" : ""}`}
               style={{ color: "var(--fg-secondary)" }}
             >
-              <FileText size={13} style={{ color: "var(--accent-from)" }} />
-              <span>{message.attachmentName}</span>
+              {message.attachmentKind === "image" && message.attachmentPreviewUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={message.attachmentPreviewUrl}
+                  alt={message.attachmentName}
+                  className="max-h-48 max-w-full rounded-lg object-contain"
+                />
+              )}
+              <div className="flex items-center gap-2">
+                {message.attachmentKind === "image" ? (
+                  <ImageIcon size={13} style={{ color: "var(--accent-from)" }} />
+                ) : (
+                  <FileText size={13} style={{ color: "var(--accent-from)" }} />
+                )}
+                <span>{message.attachmentName}</span>
+              </div>
             </div>
           )}
           {message.createdAt && <MessageTime createdAt={message.createdAt} align="end" />}
