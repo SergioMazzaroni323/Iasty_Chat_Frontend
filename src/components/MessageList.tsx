@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Copy, FileText, Pencil } from "lucide-react";
+import { Loader2, Copy, FileText, Image as ImageIcon, Pencil } from "lucide-react";
 import { useState } from "react";
 import { formatMessageTime, formatMessageTimeFull } from "@/lib/formatTime";
 import { MarkdownContent } from "./MarkdownContent";
@@ -13,6 +13,7 @@ export interface DisplayMessage {
   tokenCount?: number;
   createdAt?: string;
   attachmentName?: string;
+  attachmentKind?: "pdf" | "image";
 }
 
 interface MessageListProps {
@@ -57,7 +58,11 @@ function MessageItem({
               className={`flex items-center gap-2 text-xs ${message.content ? "mt-2" : ""}`}
               style={{ color: "var(--fg-secondary)" }}
             >
-              <FileText size={13} style={{ color: "var(--accent-from)" }} />
+              {message.attachmentKind === "image" ? (
+                <ImageIcon size={13} style={{ color: "var(--accent-from)" }} />
+              ) : (
+                <FileText size={13} style={{ color: "var(--accent-from)" }} />
+              )}
               <span>{message.attachmentName}</span>
             </div>
           )}
